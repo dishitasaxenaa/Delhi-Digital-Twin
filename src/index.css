@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #080c14;
+    color: #f8fafc;
+    overflow: hidden;
+  }
+}
+
+/* Custom Sleek Scrollbar for Command Center */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(13, 21, 36, 0.6);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #1f2e4d;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #06b6d4;
+}
+
+/* MapLibre Canvas Full Size Override */
+.maplibregl-map {
+  width: 100% !important;
+  height: 100% !important;
+  font-family: inherit;
+}
+
+.maplibregl-canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.maplibregl-ctrl-attrib {
+  background-color: rgba(8, 12, 20, 0.8) !important;
+  color: #64748b !important;
+  font-size: 9px !important;
+  border: 1px solid #1f2e4d !important;
+  border-radius: 4px !important;
+}
+
+.maplibregl-ctrl-attrib a {
+  color: #06b6d4 !important;
+}
+
+.maplibregl-ctrl-scale {
+  background-color: rgba(8, 12, 20, 0.8) !important;
+  border-color: #06b6d4 !important;
+  color: #cbd5e1 !important;
+  font-size: 9px !important;
+  font-family: monospace !important;
+}
