@@ -11,7 +11,8 @@ import {
   PanelRightClose, 
   PanelRightOpen,
   Car,
-  Wind
+  Wind,
+  RefreshCw
 } from 'lucide-react';
 import { MapLayerState } from '../types';
 
@@ -25,6 +26,13 @@ interface NavbarProps {
   rightSidebarOpen: boolean;
   setRightSidebarOpen: (open: boolean) => void;
   onResetView: () => void;
+  lastUpdated?: string;
+  aqiSource?: string;
+  trafficSource?: string;
+  aqiStatus?: string;
+  trafficStatus?: string;
+  isRefreshing?: boolean;
+  onRefresh?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -37,13 +45,19 @@ export const Navbar: React.FC<NavbarProps> = ({
   rightSidebarOpen,
   setRightSidebarOpen,
   onResetView,
+  lastUpdated,
+  aqiSource = 'CPCB / Open-Meteo Mesh',
+  trafficSource = 'TomTom Flow API',
+  aqiStatus = 'LIVE',
+  trafficStatus = 'LIVE',
+  isRefreshing = false,
+  onRefresh,
 }) => {
   const [timeString, setTimeString] = useState<string>('');
 
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      // Format: Tuesday, 17 Nov 2026 | 13:28:45 IST
       const datePart = now.toLocaleDateString('en-IN', {
         weekday: 'short',
         day: '2-digit',
@@ -63,6 +77,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const isLive = aqiStatus === 'LIVE';
 
   return (
     <header className="h-16 bg-[#080c14]/95 border-b border-[#1f2e4d] px-4 flex items-center justify-between select-none z-30 backdrop-blur-md relative">
@@ -86,7 +102,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 DELHI DIGITAL TWIN
               </span>
               <span className="px-1.5 py-0.5 text-[10px] font-mono font-semibold tracking-wider bg-cyan-950/80 text-cyan-300 border border-cyan-700/50 rounded">
-                STAGE 1
+                STAGE 2 LIVE
               </span>
             </div>
             <p className="text-[11px] text-slate-400 tracking-wide flex items-center gap-1.5">
@@ -195,20 +211,35 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Live Feed Status Pill */}
-        <div className="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg bg-[#0d1524] border border-[#1f2e4d]">
+        <div 
+          className="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg bg-[#0d1524] border border-[#1f2e4d]"
+          title={`AQI: ${aqiSource} (${aqiStatus}) • Traffic: ${trafficSource} (${trafficStatus}) • Updated: ${lastUpdated || 'Live'}`}
+        >
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isLive ? 'bg-emerald-400' : 'bg-amber-400'} opacity-75`}></span>
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${isLive ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
           </span>
           <div className="text-left">
-            <span className="text-[11px] font-mono font-semibold tracking-wider text-emerald-400 block leading-tight">
-              LIVE TELEMETRY
+            <span className={`text-[11px] font-mono font-semibold tracking-wider block leading-tight ${isLive ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {trafficStatus === 'API_KEY_REQUIRED' ? 'LIVE AQI • TOMTOM PENDING' : (isLive ? 'LIVE TELEMETRY' : 'TELEMETRY CACHED')}
             </span>
-            <span className="text-[9px] text-slate-400 font-mono block leading-none">
-              SIMULATED FEED
+            <span className="text-[9px] text-slate-400 font-mono block leading-none truncate max-w-[150px]">
+              {lastUpdated ? `Sync: ${lastUpdated.split(',')[1] || lastUpdated}` : aqiSource.split('(')[0]}
             </span>
           </div>
         </div>
+
+        {/* Manual Refresh Button */}
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className={`p-2 rounded-lg bg-[#0d1524] text-slate-400 hover:text-cyan-300 hover:bg-[#131e33] border border-[#1f2e4d] transition-colors ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`}
+            title="Refresh Live Telemetry"
+          >
+            <RefreshCw size={15} />
+          </button>
+        )}
 
         {/* Right Sidebar Toggle */}
         <button

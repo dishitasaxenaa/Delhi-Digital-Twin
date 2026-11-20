@@ -1,140 +1,145 @@
-# Delhi Digital Twin – Stage 1 (Interactive Frontend)
-### Urban Intelligence & Municipal Simulation Platform for NCT Delhi, India
+# Delhi Digital Twin – Stage 2: Real-Time Data Integration
+### Urban Intelligence & Simulation Platform for NCT Delhi, India
 
-A high-performance, command-center web application representing the virtual digital twin of the National Capital Territory (NCT) of Delhi. This platform visualizes real-time and simulated arterial traffic congestion, air quality (AQI) spatial heatmaps, and municipal incident monitoring, with a dedicated Simulation Lab module prepared for Stage 2 SUMO micro-simulation integration.
-
----
-
-## 🛠️ Technology Stack
-
-- **Framework**: React 18 with Vite & TypeScript
-- **Styling**: Tailwind CSS (Dark command-center theme `#080c14` / `#0d1524`, cyber cyan & deep blue accents)
-- **Map Engine**: MapLibre GL JS v4 with Carto Dark Matter (OpenStreetMap vector tiles), Light Positron, and Satellite basemaps
-- **Analytics & Charts**: Recharts (24-hour Diurnal AQI Area Chart, Peak Hour Congestion Line Chart, Traffic Volume vs AQI Surge Composed Chart)
-- **Icons**: Lucide React
+An upgraded, production-ready Digital Twin of the National Capital Territory (NCT) of Delhi, integrating real-world air quality telemetry, arterial traffic flow models, and persistent historical storage via a Python FastAPI backend and interactive MapLibre GL frontend.
 
 ---
 
-## 🌟 Key Features
-
-### 1. Complete Delhi Geographical Extent
-- Accurate WGS-84 boundaries covering the entire 1,484 km² NCT Delhi from Narela / Alipur in the North, Badarpur in the South, Najafgarh in the West, to Anand Vihar in the East.
-- OpenStreetMap vector tile integration displaying roads, sectors, colonies, and prominent landmarks.
-- Interactive camera controls: Zoom in/out, pan, and instantaneous "Reset Map" to NCT bounds.
-
-### 2. Traffic Flow & Congestion Visualization
-- Realistic arterial network mapping major Delhi lifelines:
-  - **Ring Road (Mahatma Gandhi Marg)**: South, West, North, and East Yamuna Bypass sections
-  - **Outer Ring Road**: North and South corridors
-  - **Expressways**: NH-48 (Delhi-Gurugram), NH-44 (GT Karnal Road), Delhi-Meerut Expressway, DND Flyway, Dwarka Expressway (UER-II)
-  - **Key Radials**: Barapullah Elevated Road, Vikas Marg, Rohtak Road (NH-9), Mathura Road, Mehrauli-Badarpur (MB) Road, Najafgarh Road
-- Four standard color-coded congestion tiers:
-  - 🟢 **Low** (>45 km/h)
-  - 🟡 **Moderate** (30–45 km/h)
-  - 🟠 **High** (18–30 km/h)
-  - 🔴 **Severe** (<18 km/h, with animated glow)
-- Clickable road segments revealing average vehicle speed, speed limits, travel time vs free-flow delay, vehicle throughput (veh/hr), and active incidents.
-
-### 3. Air Quality (AQI) Heatmap & CPCB Station Network
-- **Interpolated Spatial Heatmap**: Inverse Distance Weighting (IDW) interpolation calculated across a high-resolution grid covering Delhi, rendering smooth GPU-accelerated atmospheric concentration fields.
-- **28 Authentic CPCB / DPCC Monitoring Stations**:
-  - Anand Vihar, Jahangirpuri, Wazirpur, Punjabi Bagh, RK Puram, Bawana, Narela, Mundka, Rohini Sec 16, Dwarka Sec 8, IGI Airport T3, Lodhi Road, Mandir Marg, Major Dhyan Chand Stadium, ITO, IIT Delhi, Siri Fort, Nehru Nagar, Okhla Phase 2, Patparganj, Vivek Vihar, Sonia Vihar, Alipur, Ashok Vihar, Shadipur, Najafgarh, Aya Nagar, Pusa.
-- Six standard AQI classification tiers with interactive filter chips:
-  - 🟢 **Good** (0–50)
-  - 🟢 **Satisfactory** (51–100)
-  - 🟡 **Moderate** (101–200)
-  - 🟠 **Poor** (201–300)
-  - 🔴 **Very Poor** (301–400)
-  - 🟣 **Severe** (401–500)
-- Contextual Station Drawer displaying exact PM2.5, PM10, NO2, CO, SO2, O3 concentrations, dominant pollutants, and telemetry timestamps.
-
-### 4. City Insights & Analytical Command Center
-- Real-time aggregated metrics: City-wide AQI weighted average, network congestion load %, average speed, active incidents, and high-pollution hotspots count.
-- Interactive Recharts modules:
-  - **AQI 24-hr Diurnal Trend**: Peak tracking with 400 SEVERE threshold benchmark.
-  - **Traffic Congestion Profile**: Dual tracking of network load % and flow speed across morning and evening rush hours.
-  - **Traffic vs AQI Correlation Chart**: Dual-axis bar and line chart proving emission surges during peak traffic volumes.
-- Hotspot quick-jump cards (e.g. Bawana, Anand Vihar, Mundka) that automatically fly the map camera directly to critical zones.
-
-### 5. Future Simulation Lab (Stage 2 Preparation)
-- Dedicated municipal planning module for city authorities and traffic engineers.
-- Interactive scenario testing interface:
-  - Road closure & traffic diversion modeling (e.g., Ashram underpass maintenance diversion via Barapullah and DND).
-  - Adaptive signal split optimization (e.g., ITO & Vikas Marg green phase adjustments).
-  - Heavy commercial vehicle (HGV) night window restrictions.
-- Side-by-side **Baseline vs Proposed** impact projection matrix comparing flow speeds, congestion alleviation, and projected PM2.5/NO2 reduction.
-- Technical architecture blueprint for connecting the open-source **SUMO (Simulation of Urban MObility)** Python TraCI engine and CPCB emission models.
-
----
-
-## 📂 Project Architecture
+## 🏗️ Architecture Overview
 
 ```
-delhi-digital-twin/
-├── public/
-├── src/
-│   ├── components/
-│   │   ├── CityInsights/
-│   │   │   └── RightSidebar.tsx        # Aggregated metrics, charts, hotspot actions
-│   │   ├── MapView/
-│   │   │   ├── MapLegend.tsx           # Floating AQI & Traffic legends
-│   │   │   ├── MapPopup.tsx            # Contextual details for clicked road/station/incident
-│   │   │   └── MapView.tsx             # MapLibre GL WebGL engine & layers
-│   │   ├── Navbar.tsx                  # Top header, live clock, status pill, view switcher
-│   │   └── Sidebar/
-│   │       └── LeftSidebar.tsx         # Traffic, AQI, and Basemap controls & filters
-│   ├── data/
-│   │   ├── cityInsightsData.ts         # 24h temporal metrics, correlations, summaries
-│   │   ├── delhiBoundary.ts           # NCT Delhi GeoJSON boundary and bounds
-│   │   ├── delhiIncidents.ts          # Authentic traffic incidents across Delhi
-│   │   ├── delhiRoads.ts              # Major expressways, ring roads, arterials
-│   │   └── delhiStations.ts           # 28 CPCB monitoring stations with coordinates
-│   ├── pages/
-│   │   ├── Dashboard.tsx              # Main command center layout
-│   │   └── SimulationLab.tsx          # Municipal what-if scenario testing sandbox
+Digital Twin/
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── aqi.py              # GET /api/aqi, GET /api/aqi/stations
+│   │   │   ├── traffic.py          # GET /api/traffic, GET /api/traffic/roads, GET /api/traffic/incidents
+│   │   │   ├── city.py             # GET /api/city/summary
+│   │   │   └── history.py          # GET /api/history/aqi, GET /api/history/traffic
+│   │   ├── core/
+│   │   │   ├── config.py           # Pydantic Settings (.env configuration & thresholds)
+│   │   │   ├── cpcb_calculator.py  # Official CPCB National Air Quality Index (NAQI) calculation
+│   │   │   └── database.py         # Persistent DB manager (SQLite & PostgreSQL / PostGIS)
+│   │   ├── models/
+│   │   │   └── historical.py       # Telemetry schema definitions (AQI, Traffic, Incidents)
+│   │   ├── schemas/
+│   │   │   ├── aqi.py              # Pydantic models for station readings & pollutants
+│   │   │   ├── traffic.py          # Pydantic models for road flows & congestion categories
+│   │   │   └── city.py             # Pydantic models for aggregated city metrics
+│   │   ├── services/
+│   │   │   ├── aqi_service.py      # Real-time CPCB / Open-Meteo multi-sensor mesh adapter
+│   │   │   ├── traffic_service.py  # TomTom Traffic Flow & Incidents adapter with configurable ratios
+│   │   │   ├── cache_service.py    # Thread-safe in-memory TTL caching
+│   │   │   └── history_service.py  # Deduplicated database recording & historical aggregation
+│   │   └── main.py                 # FastAPI application, CORS, lifespan & background polling
+│   ├── requirements.txt
+│   └── run_server.py               # One-click backend startup runner
+├── src/                            # Preserved Frontend React 18 + TypeScript + MapLibre GL
+│   ├── hooks/
+│   │   └── useTelemetry.ts         # Live polling hook (Traffic 2m, AQI 15m)
 │   ├── services/
-│   │   ├── aqiService.ts              # AQI calculations, station GeoJSON, IDW heatmap
-│   │   ├── simulationService.ts       # Municipal scenario definitions
-│   │   └── trafficService.ts          # Road GeoJSON, incident points, color mappings
-│   ├── types/
-│   │   └── index.ts                   # TypeScript interfaces and domain models
-│   ├── App.tsx                        # Master layout controller
-│   ├── index.css                      # Tailwind styling & MapLibre canvas styles
-│   └── main.tsx                       # React application root
-├── index.html
+│   │   ├── apiClient.ts            # Frontend HTTP client connecting to /api endpoints
+│   │   ├── aqiService.ts           # Dynamic IDW heatmap interpolation & GeoJSON converters
+│   │   └── trafficService.ts       # Dynamic road network GeoJSON & congestion styling
+│   ├── components/                 # Command Center UI (Navbar, MapView, Popups, Sidebars)
+│   └── pages/                      # Dashboard & SimulationLab
+├── .env.example                    # Template environment variables
+├── .env                            # Active local configuration
 ├── package.json
-├── tailwind.config.js
-├── tsconfig.json
-└── vite.config.ts
+└── vite.config.ts                  # Vite config with backend proxy (/api -> http://127.0.0.1:8000)
 ```
 
 ---
 
-## 🚀 Getting Started
+## 📡 API Data Sources & Methodology
 
-### Prerequisites
-- Node.js (v18+ recommended)
-- npm or pnpm
+### 1. Air Quality Telemetry & CPCB Indexing
+- **Primary Live Data Engine**: Open-Meteo Atmospheric Real-Time Mesh (Copernicus CAMS & GEMS live atmospheric data at 0.1° resolution across NCT Delhi).
+- **Government Sources Supported**:
+  - Central Pollution Control Board (CPCB) CAAQMS via `data.gov.in` (`DATA_GOV_IN_API_KEY`)
+  - OpenAQ v3 API (`OPENAQ_API_KEY`)
+  - World Air Quality Index / AQICN (`WAQI_API_TOKEN`)
+- **Official CPCB Calculation Methodology**:
+  - Implemented strictly per the official MoEFCC / CPCB National Air Quality Index (NAQI) guidelines.
+  - Linear sub-index interpolation across official breakpoints for **PM2.5, PM10, NO2, SO2, CO, and O3**.
+  - Overall AQI computed as the maximum sub-index ($AQI = \max(I_i)$) with dominant pollutant identification.
+  - Clearly identifies whether values are direct station telemetry or CPCB-calculated from live pollutant concentrations.
+- **28 Authentic CAAQMS Stations**: Anand Vihar, Jahangirpuri, Wazirpur, Punjabi Bagh, RK Puram, Bawana, Narela, Mundka, Rohini Sec 16, Dwarka Sec 8, IGI Airport T3, Lodhi Road, Mandir Marg, Major Dhyan Chand Stadium, ITO, IIT Delhi, Siri Fort, Nehru Nagar, Okhla Phase 2, Patparganj, Vivek Vihar, Sonia Vihar, Alipur, Ashok Vihar, Shadipur, Najafgarh, Aya Nagar, PUSA.
 
-### Installation & Run
+### 2. Traffic Flow & Congestion Modeling
+- **Primary Source**: **TomTom Traffic Flow & Incident API** (`https://developer.tomtom.com/`).
+- **Configurable Speed Ratio Thresholds**:
+  Congestion level is calculated using the ratio of observed speed to free-flow speed:
+  $$\text{Ratio} = \frac{\text{Current Speed}}{\text{Free-Flow Speed}}$$
+  - **Low Congestion**: $\text{Ratio} \ge 80\%$ (configurable via `TRAFFIC_LOW_THRESHOLD=0.80`)
+  - **Moderate Congestion**: $60\% \le \text{Ratio} < 80\%$ (via `TRAFFIC_MODERATE_THRESHOLD=0.60`)
+  - **High Congestion**: $40\% \le \text{Ratio} < 60\%$ (via `TRAFFIC_HIGH_THRESHOLD=0.40`)
+  - **Severe Congestion**: $\text{Ratio} < 40\%$
+- **Delhi Arterial Network**: 17 major road stretches including Ring Road (South, West, North, East Yamuna Bypass), Outer Ring Road, NH-48 (Delhi-Gurugram), NH-44 (GT Karnal Rd), Barapullah Elevated Road, Vikas Marg, DND Flyway, Rohtak Road (NH-9), Mathura Road, MB Road, and Dwarka Expressway.
+- **Graceful Unconfigured / Offline Behavior**: When `TOMTOM_API_KEY` is not configured, the backend returns status `API_KEY_REQUIRED` with baseline arterial velocities and real road geometries, never silently claiming mock data is real-time.
 
-1. Clone or open the project directory:
-   ```bash
-   cd "Digital Twin"
-   ```
+---
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+## 💾 Persistent Database & Historical Telemetry Storage
 
-3. Launch development server:
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:5173](http://localhost:5173) in your browser.
+- **Database Engine**: Persistent storage via SQLite (`delhi_digital_twin.db`) out-of-the-box, with built-in connection support for **PostgreSQL + PostGIS** (`DATABASE_URL=postgresql://user:password@localhost:5432/delhi_digital_twin`).
+- **Deduplication**: Automatically suppresses duplicate records within telemetry refresh windows (15 min for AQI, 2 min for Traffic).
+- **Historical Analysis (Requirement 8)**:
+  - Stored records are queried via `GET /api/history/aqi` and `GET /api/history/traffic`.
+  - When history is accumulating (< 2 hours), the dashboard displays an informative "Historical Logging Active" badge and transparently avoids displaying fabricated trend lines.
+  - When $\ge 2$ hours of data are collected, charts automatically render real observed diurnal and rush-hour curves.
 
-4. Build for production:
-   ```bash
-   npm run build
-   ```
+---
+
+## ⚡ Quick Start Guide
+
+### 1. Start the FastAPI Backend
+
+In your first terminal:
+```powershell
+# Navigate to project directory
+cd "c:\Users\dishi\OneDrive\Desktop\Digital Twin"
+
+# Start FastAPI backend server
+python backend/run_server.py
+```
+Backend runs on `http://127.0.0.1:8000`. You can inspect interactive OpenAPI documentation at `http://127.0.0.1:8000/docs`.
+
+### 2. Start the Frontend
+
+In your second terminal:
+```powershell
+cd "c:\Users\dishi\OneDrive\Desktop\Digital Twin"
+
+# Launch Vite development server
+npm run dev
+```
+Open **[http://localhost:5173](http://localhost:5173)** in your browser.
+
+---
+
+## 🔑 Environment Variables Configuration (`.env`)
+
+Edit `.env` to configure external provider keys:
+
+```ini
+# Database: SQLite (default) or PostgreSQL with PostGIS
+DATABASE_URL=sqlite:///./delhi_digital_twin.db
+
+# TomTom Traffic API (https://developer.tomtom.com/)
+TOMTOM_API_KEY=
+
+# Air Quality Provider Keys (Optional)
+DATA_GOV_IN_API_KEY=
+OPENAQ_API_KEY=
+WAQI_API_TOKEN=
+
+# Configurable Traffic Thresholds (Speed / FreeFlow Speed Ratio)
+TRAFFIC_LOW_THRESHOLD=0.80
+TRAFFIC_MODERATE_THRESHOLD=0.60
+TRAFFIC_HIGH_THRESHOLD=0.40
+
+# Cache TTL (seconds)
+TRAFFIC_CACHE_TTL=120
+AQI_CACHE_TTL=900
+```

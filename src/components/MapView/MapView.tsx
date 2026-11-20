@@ -12,7 +12,10 @@ import {
   MapStyleType, 
   SelectedFeature, 
   TrafficCongestionLevel, 
-  AQICategory
+  AQICategory,
+  AQIStation,
+  RoadSegment,
+  TrafficIncident
 } from '../../types';
 import { getAQIHeatmapGeoJSON, getStationsGeoJSON, getAllStations } from '../../services/aqiService';
 import { getRoadsGeoJSON, getIncidentsGeoJSON, getAllRoads, getAllIncidents } from '../../services/trafficService';
@@ -29,6 +32,9 @@ interface MapViewProps {
   onNavigateToSimulation?: (roadName: string) => void;
   flyToLocation: [number, number] | null;
   resetViewTrigger: number;
+  stations?: AQIStation[];
+  roads?: RoadSegment[];
+  incidents?: TrafficIncident[];
 }
 
 export const MapView: React.FC<MapViewProps> = ({
@@ -41,10 +47,30 @@ export const MapView: React.FC<MapViewProps> = ({
   onNavigateToSimulation,
   flyToLocation,
   resetViewTrigger,
+  stations,
+  roads,
+  incidents,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
+
+  // Store current live telemetry in refs for event listeners
+  const stationsRef = useRef<AQIStation[]>(stations || getAllStations());
+  const roadsRef = useRef<RoadSegment[]>(roads || getAllRoads());
+  const incidentsRef = useRef<TrafficIncident[]>(incidents || getAllIncidents());
+
+  useEffect(() => {
+    if (stations) stationsRef.current = stations;
+  }, [stations]);
+
+  useEffect(() => {
+    if (roads) roadsRef.current = roads;
+  }, [roads]);
+
+  useEffect(() => {
+    if (incidents) incidentsRef.current = incidents;
+  }, [incidents]);
 
   // Determine Map Style URL
   const getStyleUrl = (style: MapStyleType) => {
@@ -117,7 +143,7 @@ export const MapView: React.FC<MapViewProps> = ({
     if (!map.getSource('aqi-heatmap-source')) {
       map.addSource('aqi-heatmap-source', {
         type: 'geojson',
-        data: getAQIHeatmapGeoJSON(),
+        data: getAQIHeatmapGeoJSON(stationsRef.current),
       });
 
       map.addLayer({
@@ -126,9 +152,7 @@ export const MapView: React.FC<MapViewProps> = ({
         source: 'aqi-heatmap-source',
         maxzoom: 15,
         paint: {
-          // Increase the heatmap weight based on AQI weight property
           'heatmap-weight': ['interpolate', ['linear'], ['get', 'weight'], 0, 0, 1, 1],
-          // Increase the heatmap color weight by zoom level
           'heatmap-intensity': [
             'interpolate',
             ['linear'],
@@ -137,7 +161,6 @@ export const MapView: React.FC<MapViewProps> = ({
             11, 1.2,
             14, 1.8,
           ],
-          // Color ramp for heatmap from Good (green) to Severe (maroon)
           'heatmap-color': [
             'interpolate',
             ['linear'],
@@ -150,7 +173,6 @@ export const MapView: React.FC<MapViewProps> = ({
             0.85, '#ef4444',   // Very Poor (Red)
             1.0, '#881337',    // Severe (Maroon)
           ],
-          // Adjust the heatmap radius by zoom level
           'heatmap-radius': [
             'interpolate',
             ['linear'],
@@ -168,7 +190,7 @@ export const MapView: React.FC<MapViewProps> = ({
     if (!map.getSource('delhi-roads-source')) {
       map.addSource('delhi-roads-source', {
         type: 'geojson',
-        data: getRoadsGeoJSON(),
+        data: getRoadsGeoJSON(roadsRef.current),
       });
 
       // Road background/casing
@@ -237,7 +259,7 @@ export const MapView: React.FC<MapViewProps> = ({
     if (!map.getSource('delhi-incidents-source')) {
       map.addSource('delhi-incidents-source', {
         type: 'geojson',
-        data: getIncidentsGeoJSON(),
+        data: getIncidentsGeoJSON(incidentsRef.current),
       });
 
       // Outer alert pulse circle
@@ -272,7 +294,7 @@ export const MapView: React.FC<MapViewProps> = ({
     if (!map.getSource('delhi-stations-source')) {
       map.addSource('delhi-stations-source', {
         type: 'geojson',
-        data: getStationsGeoJSON(),
+        data: getStationsGeoJSON(stationsRef.current),
       });
 
       // Outer station halo
@@ -336,7 +358,7 @@ export const MapView: React.FC<MapViewProps> = ({
     map.on('click', 'delhi-stations-halo', (e) => {
       if (e.features && e.features[0]) {
         const id = e.features[0].properties?.id;
-        const station = getAllStations().find((s) => s.id === id);
+        const station = stationsRef.current.find((s) => s.id === id);
         if (station) {
           setSelectedFeature({ type: 'station', data: station });
           map.flyTo({
@@ -352,7 +374,7 @@ export const MapView: React.FC<MapViewProps> = ({
     map.on('click', 'delhi-roads-line', (e) => {
       if (e.features && e.features[0]) {
         const id = e.features[0].properties?.id;
-        const road = getAllRoads().find((r) => r.id === id);
+        const road = roadsRef.current.find((r) => r.id === id);
         if (road) {
           setSelectedFeature({ type: 'road', data: road });
         }
@@ -363,7 +385,7 @@ export const MapView: React.FC<MapViewProps> = ({
     map.on('click', 'delhi-incidents-point', (e) => {
       if (e.features && e.features[0]) {
         const id = e.features[0].properties?.id;
-        const incident = getAllIncidents().find((inc) => inc.id === id);
+        const incident = incidentsRef.current.find((inc) => inc.id === id);
         if (incident) {
           setSelectedFeature({ type: 'incident', data: incident });
           map.flyTo({
@@ -387,6 +409,37 @@ export const MapView: React.FC<MapViewProps> = ({
     });
   }, [setSelectedFeature]);
 
+  // Update Dynamic Sources when live telemetry changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+
+    if (stations && stations.length > 0) {
+      const stationsSource = map.getSource('delhi-stations-source') as maplibregl.GeoJSONSource | undefined;
+      if (stationsSource) {
+        stationsSource.setData(getStationsGeoJSON(stations));
+      }
+      const heatmapSource = map.getSource('aqi-heatmap-source') as maplibregl.GeoJSONSource | undefined;
+      if (heatmapSource) {
+        heatmapSource.setData(getAQIHeatmapGeoJSON(stations));
+      }
+    }
+
+    if (roads && roads.length > 0) {
+      const roadsSource = map.getSource('delhi-roads-source') as maplibregl.GeoJSONSource | undefined;
+      if (roadsSource) {
+        roadsSource.setData(getRoadsGeoJSON(roads));
+      }
+    }
+
+    if (incidents && incidents.length > 0) {
+      const incidentsSource = map.getSource('delhi-incidents-source') as maplibregl.GeoJSONSource | undefined;
+      if (incidentsSource) {
+        incidentsSource.setData(getIncidentsGeoJSON(incidents));
+      }
+    }
+  }, [stations, roads, incidents, mapLoaded]);
+
   // Initialize Map
   useEffect(() => {
     if (!mapContainerRef.current) return;
@@ -401,7 +454,7 @@ export const MapView: React.FC<MapViewProps> = ({
       attributionControl: false,
     });
 
-    // Add minimal scale and attribution control
+    // Add scale and attribution control
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }), 'bottom-right');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 
@@ -422,7 +475,7 @@ export const MapView: React.FC<MapViewProps> = ({
       mapRef.current = null;
       setMapLoaded(false);
     };
-  }, []); // Run once on mount
+  }, []);
 
   // Handle Map Style Changes (Dark, Light, Satellite)
   useEffect(() => {

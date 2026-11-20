@@ -20,7 +20,8 @@ import {
   TrafficCongestionLevel, 
   AQICategory,
   TrafficIncident,
-  AQIStation 
+  AQIStation,
+  RoadSegment
 } from '../../types';
 import { getAllIncidents } from '../../services/trafficService';
 import { getAllStations } from '../../services/aqiService';
@@ -39,6 +40,11 @@ interface LeftSidebarProps {
   setSelectedCongestionFilter: (filter: TrafficCongestionLevel | 'All') => void;
   selectedAQIFilter: AQICategory | 'All';
   setSelectedAQIFilter: (filter: AQICategory | 'All') => void;
+  stations?: AQIStation[];
+  roads?: RoadSegment[];
+  incidents?: TrafficIncident[];
+  avgSpeed?: number;
+  congestionPercent?: number;
 }
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
@@ -55,6 +61,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   setSelectedCongestionFilter,
   selectedAQIFilter,
   setSelectedAQIFilter,
+  stations,
+  incidents,
+  avgSpeed,
+  congestionPercent,
 }) => {
   const [trafficExpanded, setTrafficExpanded] = useState<boolean>(true);
   const [aqiExpanded, setAqiExpanded] = useState<boolean>(true);
@@ -62,16 +72,26 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const [incidentsListExpanded, setIncidentsListExpanded] = useState<boolean>(false);
   const [stationSearch, setStationSearch] = useState<string>('');
 
-  const incidents = getAllIncidents();
-  const stations = getAllStations();
+  const activeIncidents = incidents && incidents.length > 0 ? incidents : getAllIncidents();
+  const activeStations = stations && stations.length > 0 ? stations : getAllStations();
+
+  // Dynamic PM2.5 and PM10 Averages from active stations
+  const pm25Values = activeStations.map(s => s.pm25).filter((v): v is number => typeof v === 'number');
+  const dynamicAvgPM25 = pm25Values.length > 0 ? (pm25Values.reduce((a, b) => a + b, 0) / pm25Values.length).toFixed(1) : '278.4';
+
+  const pm10Values = activeStations.map(s => s.pm10).filter((v): v is number => typeof v === 'number');
+  const dynamicAvgPM10 = pm10Values.length > 0 ? (pm10Values.reduce((a, b) => a + b, 0) / pm10Values.length).toFixed(1) : '382.1';
+
+  const dynamicAvgSpeed = avgSpeed !== undefined ? avgSpeed.toFixed(1) : '25.2';
+  const dynamicCongestion = congestionPercent !== undefined ? `${Math.round(congestionPercent)}%` : '66%';
 
   const filteredStations = stationSearch.trim()
-    ? stations.filter(s => 
+    ? activeStations.filter(s => 
         s.name.toLowerCase().includes(stationSearch.toLowerCase()) || 
         s.district.toLowerCase().includes(stationSearch.toLowerCase()) ||
         s.locality.toLowerCase().includes(stationSearch.toLowerCase())
       )
-    : stations.slice(0, 5); // default top 5
+    : activeStations.slice(0, 5); // default top 5
 
   return (
     <aside className="w-80 md:w-88 h-full bg-[#080c14]/95 border-r border-[#1f2e4d] flex flex-col overflow-hidden backdrop-blur-md z-20 transition-all select-none">
@@ -135,11 +155,11 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     <Gauge size={12} className="text-cyan-400" />
                   </div>
                   <div className="flex items-baseline space-x-1">
-                    <span className="text-lg font-mono font-bold text-white">25.2</span>
+                    <span className="text-lg font-mono font-bold text-white">{dynamicAvgSpeed}</span>
                     <span className="text-[10px] text-slate-400 font-mono">km/h</span>
                   </div>
                   <div className="text-[9px] text-orange-400 font-mono mt-0.5 flex items-center gap-1">
-                    <span>↓ 38% vs free flow</span>
+                    <span>Observed Corridor Mean</span>
                   </div>
                 </div>
 
@@ -149,11 +169,11 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     <Car size={12} className="text-amber-400" />
                   </div>
                   <div className="flex items-baseline space-x-1">
-                    <span className="text-lg font-mono font-bold text-amber-400">66%</span>
+                    <span className="text-lg font-mono font-bold text-amber-400">{dynamicCongestion}</span>
                     <span className="text-[10px] text-slate-400 font-mono">Index</span>
                   </div>
                   <div className="text-[9px] text-slate-400 font-mono mt-0.5">
-                    High Peak Demand
+                    Live Velocity Ratio
                   </div>
                 </div>
               </div>
@@ -245,7 +265,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     <AlertTriangle size={13} className="text-amber-400" />
                     <span className="font-semibold text-slate-200 text-xs">Traffic Incidents</span>
                     <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-red-950/80 text-red-400 border border-red-800/40">
-                      {incidents.length} Active
+                      {activeIncidents.length} Active
                     </span>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
@@ -263,13 +283,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                   onClick={() => setIncidentsListExpanded(!incidentsListExpanded)}
                   className="w-full text-left flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#131e33] hover:bg-[#1a2942] border border-[#1f2e4d] text-[11px] font-mono text-slate-300 transition-colors"
                 >
-                  <span>{incidentsListExpanded ? 'Hide Incidents List' : 'View Delhi Incidents (' + incidents.length + ')'}</span>
+                  <span>{incidentsListExpanded ? 'Hide Incidents List' : 'View Delhi Incidents (' + activeIncidents.length + ')'}</span>
                   {incidentsListExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </button>
 
                 {incidentsListExpanded && (
                   <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-                    {incidents.map((inc) => (
+                    {activeIncidents.map((inc) => (
                       <div
                         key={inc.id}
                         onClick={() => onSelectIncident(inc)}
@@ -338,28 +358,28 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 <div className="p-2.5 rounded-lg bg-[#131e33]/80 border border-[#1f2e4d]">
                   <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
                     <span>City PM2.5 Avg</span>
-                    <span className="text-[9px] font-mono text-rose-400">Severe</span>
+                    <span className="text-[9px] font-mono text-rose-400">Telemetry</span>
                   </div>
                   <div className="flex items-baseline space-x-1">
-                    <span className="text-lg font-mono font-bold text-rose-400">278.4</span>
+                    <span className="text-lg font-mono font-bold text-rose-400">{dynamicAvgPM25}</span>
                     <span className="text-[10px] text-slate-400 font-mono">µg/m³</span>
                   </div>
                   <div className="text-[9px] text-slate-400 font-mono mt-0.5">
-                    Std: 60 µg/m³ (4.6x)
+                    Std: 60 µg/m³
                   </div>
                 </div>
 
                 <div className="p-2.5 rounded-lg bg-[#131e33]/80 border border-[#1f2e4d]">
                   <div className="flex items-center justify-between text-slate-400 text-[10px] mb-1">
                     <span>City PM10 Avg</span>
-                    <span className="text-[9px] font-mono text-orange-400">Very Poor</span>
+                    <span className="text-[9px] font-mono text-orange-400">Telemetry</span>
                   </div>
                   <div className="flex items-baseline space-x-1">
-                    <span className="text-lg font-mono font-bold text-orange-400">382.1</span>
+                    <span className="text-lg font-mono font-bold text-orange-400">{dynamicAvgPM10}</span>
                     <span className="text-[10px] text-slate-400 font-mono">µg/m³</span>
                   </div>
                   <div className="text-[9px] text-slate-400 font-mono mt-0.5">
-                    Std: 100 µg/m³ (3.8x)
+                    Std: 100 µg/m³
                   </div>
                 </div>
               </div>
@@ -478,7 +498,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               <div className="pt-2 border-t border-[#1f2e4d]/70">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[11px] font-semibold text-slate-200">
-                    Find CPCB Station ({stations.length})
+                    Find CPCB Station ({activeStations.length})
                   </span>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input 

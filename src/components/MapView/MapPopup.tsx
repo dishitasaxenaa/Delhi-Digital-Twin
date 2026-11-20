@@ -7,7 +7,8 @@ import {
   Clock, 
   MapPin, 
   ArrowRight,
-  Compass
+  Compass,
+  CheckCircle2
 } from 'lucide-react';
 import { SelectedFeature } from '../../types';
 import { getAQIColor, getAQIBadgeClass } from '../../services/aqiService';
@@ -43,9 +44,16 @@ export const MapPopup: React.FC<MapPopupProps> = ({
                 <Wind size={16} />
               </div>
               <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 block">
-                  CPCB AQI Station
-                </span>
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 block">
+                    CPCB CAAQMS Station
+                  </span>
+                  {selectedFeature.data.isLive && (
+                    <span className="px-1 py-0.2 rounded text-[8px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800">
+                      LIVE
+                    </span>
+                  )}
+                </div>
                 <h3 className="font-bold text-slate-100 text-sm leading-tight">
                   {selectedFeature.data.name}
                 </h3>
@@ -74,9 +82,9 @@ export const MapPopup: React.FC<MapPopupProps> = ({
                 </span>
                 <div className="flex items-baseline space-x-2">
                   <span className="text-3xl font-mono font-extrabold text-white">
-                    {selectedFeature.data.aqi}
+                    {selectedFeature.data.aqi > 0 ? selectedFeature.data.aqi : '--'}
                   </span>
-                  <span className="text-xs text-slate-400 font-mono">AQI</span>
+                  <span className="text-xs text-slate-400 font-mono">NAQI</span>
                 </div>
               </div>
               <div className="text-right">
@@ -91,49 +99,58 @@ export const MapPopup: React.FC<MapPopupProps> = ({
 
             {/* Pollutants Breakdown Grid */}
             <div>
-              <span className="text-[10px] font-mono uppercase text-slate-400 block mb-1.5">
-                Concentration Telemetry
-              </span>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-mono uppercase text-slate-400 block">
+                  Sensor Pollutants Telemetry
+                </span>
+                {selectedFeature.data.isCalculated && (
+                  <span className="text-[9px] font-mono text-cyan-400 flex items-center gap-1">
+                    <CheckCircle2 size={10} />
+                    <span>CPCB NAQI Method</span>
+                  </span>
+                )}
+              </div>
+
               <div className="grid grid-cols-3 gap-1.5 font-mono text-center">
                 <div className="p-2 rounded-lg bg-[#131e33] border border-[#1f2e4d]">
                   <span className="text-[9px] text-slate-400 block">PM2.5</span>
                   <span className="text-xs font-bold text-rose-400 block mt-0.5">
-                    {selectedFeature.data.pm25}
+                    {selectedFeature.data.pm25 !== null && selectedFeature.data.pm25 !== undefined ? selectedFeature.data.pm25 : '--'}
                   </span>
                   <span className="text-[8px] text-slate-500">µg/m³</span>
                 </div>
                 <div className="p-2 rounded-lg bg-[#131e33] border border-[#1f2e4d]">
                   <span className="text-[9px] text-slate-400 block">PM10</span>
                   <span className="text-xs font-bold text-orange-400 block mt-0.5">
-                    {selectedFeature.data.pm10}
+                    {selectedFeature.data.pm10 !== null && selectedFeature.data.pm10 !== undefined ? selectedFeature.data.pm10 : '--'}
                   </span>
                   <span className="text-[8px] text-slate-500">µg/m³</span>
                 </div>
                 <div className="p-2 rounded-lg bg-[#131e33] border border-[#1f2e4d]">
                   <span className="text-[9px] text-slate-400 block">NO2</span>
                   <span className="text-xs font-bold text-amber-400 block mt-0.5">
-                    {selectedFeature.data.no2}
+                    {selectedFeature.data.no2 !== null && selectedFeature.data.no2 !== undefined ? selectedFeature.data.no2 : '--'}
                   </span>
                   <span className="text-[8px] text-slate-500">µg/m³</span>
                 </div>
                 <div className="p-2 rounded-lg bg-[#131e33] border border-[#1f2e4d]">
                   <span className="text-[9px] text-slate-400 block">CO</span>
                   <span className="text-xs font-bold text-slate-200 block mt-0.5">
-                    {selectedFeature.data.co}
+                    {selectedFeature.data.co !== null && selectedFeature.data.co !== undefined ? selectedFeature.data.co : '--'}
                   </span>
                   <span className="text-[8px] text-slate-500">mg/m³</span>
                 </div>
                 <div className="p-2 rounded-lg bg-[#131e33] border border-[#1f2e4d]">
                   <span className="text-[9px] text-slate-400 block">O3</span>
                   <span className="text-xs font-bold text-cyan-300 block mt-0.5">
-                    {selectedFeature.data.o3}
+                    {selectedFeature.data.o3 !== null && selectedFeature.data.o3 !== undefined ? selectedFeature.data.o3 : '--'}
                   </span>
                   <span className="text-[8px] text-slate-500">µg/m³</span>
                 </div>
                 <div className="p-2 rounded-lg bg-[#131e33] border border-[#1f2e4d]">
                   <span className="text-[9px] text-slate-400 block">SO2</span>
                   <span className="text-xs font-bold text-slate-200 block mt-0.5">
-                    {selectedFeature.data.so2}
+                    {selectedFeature.data.so2 !== null && selectedFeature.data.so2 !== undefined ? selectedFeature.data.so2 : '--'}
                   </span>
                   <span className="text-[8px] text-slate-500">µg/m³</span>
                 </div>
@@ -146,7 +163,9 @@ export const MapPopup: React.FC<MapPopupProps> = ({
                 <Clock size={11} className="text-cyan-400" />
                 <span>{selectedFeature.data.timestamp}</span>
               </span>
-              <span className="text-slate-500">CPCB Mesh</span>
+              <span className="text-slate-500 truncate max-w-[140px]" title={selectedFeature.data.source}>
+                {selectedFeature.data.source}
+              </span>
             </div>
           </div>
         </div>
@@ -167,9 +186,20 @@ export const MapPopup: React.FC<MapPopupProps> = ({
                 <Car size={16} />
               </div>
               <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 block">
-                  {selectedFeature.data.type} Corridor
-                </span>
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 block">
+                    {selectedFeature.data.type} Corridor
+                  </span>
+                  {selectedFeature.data.isLive ? (
+                    <span className="px-1 py-0.2 rounded text-[8px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800">
+                      LIVE SENSOR
+                    </span>
+                  ) : (
+                    <span className="px-1 py-0.2 rounded text-[8px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
+                      FLOW BASELINE
+                    </span>
+                  )}
+                </div>
                 <h3 className="font-bold text-slate-100 text-sm leading-tight">
                   {selectedFeature.data.name}
                 </h3>
@@ -194,7 +224,7 @@ export const MapPopup: React.FC<MapPopupProps> = ({
             <div className="p-3 rounded-xl bg-[#0d1524] border border-[#1f2e4d] flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-mono text-slate-400 uppercase block">
-                  Average Vehicle Speed
+                  Current Observed Speed
                 </span>
                 <div className="flex items-baseline space-x-2">
                   <span className="text-3xl font-mono font-extrabold text-white">
@@ -203,15 +233,15 @@ export const MapPopup: React.FC<MapPopupProps> = ({
                   <span className="text-xs text-slate-400 font-mono">km/h</span>
                 </div>
                 <span className="text-[9px] text-slate-500 font-mono block">
-                  Speed Limit: {selectedFeature.data.speedLimitKmH} km/h
+                  Free-Flow: {selectedFeature.data.freeFlowSpeedKmH || selectedFeature.data.speedLimitKmH} km/h
                 </span>
               </div>
               <div className="text-right">
                 <span className={`px-2.5 py-1 rounded-md text-xs font-mono font-bold tracking-wide ${getCongestionBadgeClass(selectedFeature.data.congestionLevel)}`}>
                   {selectedFeature.data.congestionLevel} Congestion
                 </span>
-                <span className="text-[9px] text-slate-400 font-mono block mt-1">
-                  Flow: {selectedFeature.data.flowVehiclesPerHour} veh/hr
+                <span className="text-[9px] text-cyan-400 font-mono block mt-1">
+                  Speed Ratio: {Math.round((selectedFeature.data.congestionRatio || (selectedFeature.data.avgSpeedKmH / (selectedFeature.data.freeFlowSpeedKmH || 60))) * 100)}%
                 </span>
               </div>
             </div>
@@ -219,12 +249,12 @@ export const MapPopup: React.FC<MapPopupProps> = ({
             {/* Travel Time Comparison */}
             <div className="grid grid-cols-2 gap-2 font-mono">
               <div className="p-2.5 rounded-lg bg-[#131e33] border border-[#1f2e4d]">
-                <span className="text-[9px] text-slate-400 block">Est. Travel Time</span>
+                <span className="text-[9px] text-slate-400 block">Current Travel Time</span>
                 <span className="text-base font-bold text-amber-400 block mt-0.5">
                   {selectedFeature.data.travelTimeMin} min
                 </span>
                 <span className="text-[8px] text-rose-400 block">
-                  +{selectedFeature.data.travelTimeMin - selectedFeature.data.normalTimeMin} min delay
+                  +{Math.max(0, Math.round(selectedFeature.data.travelTimeMin - selectedFeature.data.normalTimeMin))} min delay
                 </span>
               </div>
 
@@ -248,6 +278,12 @@ export const MapPopup: React.FC<MapPopupProps> = ({
                 </span>
               </div>
             )}
+
+            {/* Source info */}
+            <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between">
+              <span>Data Source:</span>
+              <span className="text-cyan-400">{selectedFeature.data.source || 'TomTom / OSM Mesh'}</span>
+            </div>
 
             {/* Action button: Send to Simulation Lab */}
             {onNavigateToSimulation && (

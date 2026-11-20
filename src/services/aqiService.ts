@@ -2,6 +2,7 @@ import { AQICategory, AQIStation } from '../types';
 import { delhiStations } from '../data/delhiStations';
 
 export function getAQICategory(aqi: number): AQICategory {
+  if (aqi <= 0) return 'Unavailable';
   if (aqi <= 50) return 'Good';
   if (aqi <= 100) return 'Satisfactory';
   if (aqi <= 200) return 'Moderate';
@@ -30,7 +31,7 @@ export function getAQIColor(value: number | AQICategory): string {
   }
 }
 
-export function getAQIBadgeClass(category: AQICategory): string {
+export function getAQIBadgeClass(category: AQICategory | string): string {
   switch (category) {
     case 'Good':
       return 'bg-emerald-950/70 text-emerald-400 border border-emerald-500/40';
@@ -44,6 +45,8 @@ export function getAQIBadgeClass(category: AQICategory): string {
       return 'bg-red-950/70 text-red-400 border border-red-500/40';
     case 'Severe':
       return 'bg-rose-950/90 text-rose-300 border border-rose-600/60 animate-pulse';
+    default:
+      return 'bg-slate-800 text-slate-300 border border-slate-700';
   }
 }
 
@@ -51,15 +54,17 @@ export function getAllStations(): AQIStation[] {
   return delhiStations;
 }
 
-export function getStationById(id: string): AQIStation | undefined {
-  return delhiStations.find((s) => s.id === id);
+export function getStationById(id: string, customList?: AQIStation[]): AQIStation | undefined {
+  const list = customList && customList.length > 0 ? customList : delhiStations;
+  return list.find((s) => s.id === id);
 }
 
 // Convert stations to GeoJSON Point FeatureCollection for MapLibre
-export function getStationsGeoJSON() {
+export function getStationsGeoJSON(customStations?: AQIStation[]) {
+  const stations = customStations && customStations.length > 0 ? customStations : delhiStations;
   return {
     type: 'FeatureCollection' as const,
-    features: delhiStations.map((station) => ({
+    features: stations.map((station) => ({
       type: 'Feature' as const,
       id: station.id,
       properties: {
@@ -78,6 +83,8 @@ export function getStationsGeoJSON() {
         dominantPollutant: station.dominantPollutant,
         timestamp: station.timestamp,
         source: station.source,
+        isLive: station.isLive,
+        isCalculated: station.isCalculated,
         weight: Math.min(Math.max((station.aqi - 50) / 450, 0.1), 1.0),
       },
       geometry: {
@@ -89,7 +96,8 @@ export function getStationsGeoJSON() {
 }
 
 // Generate interpolated AQI grid points across NCT Delhi for smooth heatmap rendering
-export function getAQIHeatmapGeoJSON() {
+export function getAQIHeatmapGeoJSON(customStations?: AQIStation[]) {
+  const stations = customStations && customStations.length > 0 ? customStations : delhiStations;
   const points: {
     type: 'Feature';
     properties: { aqi: number; weight: number };
@@ -113,23 +121,24 @@ export function getAQIHeatmapGeoJSON() {
       const lng = minLng + i * lngDelta;
       const lat = minLat + j * latDelta;
 
-      // Inverse Distance Weighting (IDW) from all stations
+      // Inverse Distance Weighting (IDW) from all reporting stations
       let weightedAqiSum = 0;
       let totalWeight = 0;
 
-      for (const station of delhiStations) {
+      for (const station of stations) {
+        if (station.aqi <= 0) continue;
         const dLng = lng - station.coordinates[0];
         const dLat = lat - station.coordinates[1];
         const distSq = dLng * dLng + dLat * dLat;
         const dist = Math.sqrt(distSq);
 
-        // Power parameter p=2
+        // Power parameter p=2.2
         const w = 1 / Math.pow(Math.max(dist, 0.015), 2.2);
         weightedAqiSum += station.aqi * w;
         totalWeight += w;
       }
 
-      const interpolatedAqi = Math.round(weightedAqiSum / totalWeight);
+      const interpolatedAqi = totalWeight > 0 ? Math.round(weightedAqiSum / totalWeight) : 200;
       const normalizedWeight = Math.min(Math.max((interpolatedAqi - 40) / 460, 0.05), 1.0);
 
       points.push({
@@ -147,7 +156,8 @@ export function getAQIHeatmapGeoJSON() {
   }
 
   // Also include the actual station points with high weight
-  for (const st of delhiStations) {
+  for (const st of stations) {
+    if (st.aqi <= 0) continue;
     points.push({
       type: 'Feature',
       properties: {

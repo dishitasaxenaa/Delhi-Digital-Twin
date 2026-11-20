@@ -10,7 +10,8 @@ import {
   AQICategory,
   TrafficIncident,
   AQIStation,
-  RoadSegment 
+  RoadSegment,
+  CitySummary 
 } from '../types';
 
 interface DashboardProps {
@@ -23,6 +24,10 @@ interface DashboardProps {
   onNavigateToSimulation: (roadName: string) => void;
   resetViewTrigger: number;
   onTriggerResetView: () => void;
+  stations?: AQIStation[];
+  roads?: RoadSegment[];
+  incidents?: TrafficIncident[];
+  citySummary?: CitySummary;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -33,6 +38,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNavigateToSimulation,
   resetViewTrigger,
   onTriggerResetView,
+  stations,
+  roads,
+  incidents,
+  citySummary,
 }) => {
   const [mapStyle, setMapStyle] = useState<MapStyleType>('dark');
   const [selectedFeature, setSelectedFeature] = useState<SelectedFeature>(null);
@@ -41,7 +50,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [flyToLocation, setFlyToLocation] = useState<[number, number] | null>(null);
 
   const handleZoomIn = () => {
-    // handled via event or ref
     const evt = new KeyboardEvent('keydown', { key: '+' });
     window.dispatchEvent(evt);
   };
@@ -87,6 +95,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
           setSelectedCongestionFilter={setSelectedCongestionFilter}
           selectedAQIFilter={selectedAQIFilter}
           setSelectedAQIFilter={setSelectedAQIFilter}
+          stations={stations}
+          roads={roads}
+          incidents={incidents}
+          avgSpeed={citySummary?.avgSpeedKmH}
+          congestionPercent={citySummary?.avgCongestionPercent}
         />
       )}
 
@@ -129,6 +142,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onNavigateToSimulation={onNavigateToSimulation}
           flyToLocation={flyToLocation}
           resetViewTrigger={resetViewTrigger}
+          stations={stations}
+          roads={roads}
+          incidents={incidents}
         />
       </main>
 
@@ -137,6 +153,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <RightSidebar
           onSelectStation={handleSelectStation}
           onSelectRoad={handleSelectRoad}
+          citySummary={citySummary}
+          stations={stations}
+          roads={roads}
+          trends={citySummary?.trends}
+          hasSufficientHistory={citySummary?.hasSufficientHistory}
         />
       )}
     </div>
