@@ -48,6 +48,8 @@ export interface RoadSegment {
   congestionRatio?: number;
   source?: string;
   isLive?: boolean;
+  trafficGeometry?: [number, number][];
+  sourceTimestamp?: string;
 }
 
 export type IncidentType = 'Breakdown' | 'Accident' | 'Construction' | 'Waterlogging' | 'Congestion Spill';

@@ -54,11 +54,15 @@ export const MapView: React.FC<MapViewProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
+  const [styleRevision, setStyleRevision] = useState(0);
+  const appliedStyleRef = useRef<MapStyleType>(mapStyle);
+  const interactionsInitializedRef = useRef(false);
 
   // Store current live telemetry in refs for event listeners
   const stationsRef = useRef<AQIStation[]>(stations || getAllStations());
   const roadsRef = useRef<RoadSegment[]>(roads || getAllRoads());
   const incidentsRef = useRef<TrafficIncident[]>(incidents || getAllIncidents());
+  const osmRoadSourceRef = useRef<any>(null);
 
   useEffect(() => {
     if (stations) stationsRef.current = stations;
@@ -82,6 +86,9 @@ export const MapView: React.FC<MapViewProps> = ({
       case 'satellite':
         return {
           version: 8,
+          // Satellite is a raster-only custom style, but custom station labels
+          // still need a glyph endpoint after every style reload.
+          glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
           sources: {
             'esri-satellite': {
               type: 'raster',
@@ -107,6 +114,37 @@ export const MapView: React.FC<MapViewProps> = ({
 
   // Add all Custom Layers to the MapLibre Map
   const addDigitalTwinLayers = useCallback((map: maplibregl.Map) => {
+    // CARTO's basemap vector tiles are sourced from OpenStreetMap. Reuse their
+    // roads source on street styles and retain its source spec for Satellite.
+    const currentStyleSources = map.getStyle().sources as Record<string, any>;
+    osmRoadSourceRef.current = currentStyleSources.protomaps || osmRoadSourceRef.current;
+    const osmRoadSourceId = currentStyleSources.protomaps ? 'protomaps' : 'delhi-osm-roads-source';
+    if (osmRoadSourceId === 'delhi-osm-roads-source' && !map.getSource(osmRoadSourceId) && osmRoadSourceRef.current) {
+      // Reuse CARTO's full vector source definition, including its TileJSON
+      // metadata and current tile endpoint, so roads continue loading over
+      // the raster-only Satellite style.
+      map.addSource('delhi-osm-roads-source', osmRoadSourceRef.current);
+    }
+    if (!map.getLayer('delhi-osm-roads-layer') && map.getSource(osmRoadSourceId)) {
+      map.addLayer({
+        id: 'delhi-osm-roads-layer',
+        type: 'line',
+        source: osmRoadSourceId,
+        'source-layer': 'roads',
+        filter: ['in', ['get', 'kind_detail'], ['literal', [
+          'motorway', 'motorway_link', 'trunk', 'trunk_link',
+          'primary', 'primary_link', 'secondary', 'secondary_link',
+          'tertiary', 'tertiary_link',
+        ]]],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#718096',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.55, 10, 1.1, 14, 1.8],
+          'line-opacity': 0.65,
+        },
+      });
+    }
+
     // 1. Delhi NCT Boundary
     if (!map.getSource('delhi-boundary-source')) {
       map.addSource('delhi-boundary-source', {
@@ -148,40 +186,31 @@ export const MapView: React.FC<MapViewProps> = ({
 
       map.addLayer({
         id: 'aqi-heatmap-layer',
-        type: 'heatmap',
+        type: 'circle',
         source: 'aqi-heatmap-source',
-        maxzoom: 15,
         paint: {
-          'heatmap-weight': ['interpolate', ['linear'], ['get', 'weight'], 0, 0, 1, 1],
-          'heatmap-intensity': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            9, 0.7,
-            11, 1.2,
-            14, 1.8,
+          'circle-color': [
+            'match', ['get', 'category'],
+            'Good', '#10b981',
+            'Satisfactory', '#84cc16',
+            'Moderate', '#eab308',
+            'Poor', '#f97316',
+            'Very Poor', '#ef4444',
+            'Severe', '#881337',
+            '#64748b',
           ],
-          'heatmap-color': [
-            'interpolate',
-            ['linear'],
-            ['heatmap-density'],
-            0, 'rgba(16, 185, 129, 0)',
-            0.15, '#10b981',   // Good (Green)
-            0.3, '#84cc16',    // Satisfactory (Lime)
-            0.5, '#eab308',    // Moderate (Yellow)
-            0.7, '#f97316',    // Poor (Orange)
-            0.85, '#ef4444',   // Very Poor (Red)
-            1.0, '#881337',    // Severe (Maroon)
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 14, 10, 28, 12, 44, 14, 64],
+          'circle-blur': 0.9,
+          'circle-opacity': [
+            'match', ['get', 'category'],
+            'Good', 0.14,
+            'Satisfactory', 0.18,
+            'Moderate', 0.24,
+            'Poor', 0.3,
+            'Very Poor', 0.36,
+            'Severe', 0.42,
+            0,
           ],
-          'heatmap-radius': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            9, 28,
-            11, 45,
-            14, 70,
-          ],
-          'heatmap-opacity': 0.65,
         },
       });
     }
@@ -353,7 +382,29 @@ export const MapView: React.FC<MapViewProps> = ({
       });
     }
 
-    // Setup Click Handlers
+    // Keep the city overlays above every basemap's own style layers. This is
+    // required because setStyle replaces the entire style and its layer stack.
+    [
+      'delhi-osm-roads-layer',
+      'aqi-heatmap-layer',
+      'delhi-boundary-fill',
+      'delhi-roads-casing',
+      'delhi-roads-line',
+      'delhi-roads-glow',
+      'delhi-incidents-pulse',
+      'delhi-incidents-point',
+      'delhi-stations-halo',
+      'delhi-stations-point',
+      'delhi-boundary-line',
+      'delhi-stations-label',
+    ].forEach((layerId) => {
+      if (map.getLayer(layerId)) map.moveLayer(layerId);
+    });
+
+    // Setup click and hover handlers once per map instance. Style changes
+    // replace layers but retain map-level delegated handlers.
+    if (interactionsInitializedRef.current) return;
+    interactionsInitializedRef.current = true;
     // Click on Stations
     map.on('click', 'delhi-stations-halo', (e) => {
       if (e.features && e.features[0]) {
@@ -438,7 +489,7 @@ export const MapView: React.FC<MapViewProps> = ({
         incidentsSource.setData(getIncidentsGeoJSON(incidents));
       }
     }
-  }, [stations, roads, incidents, mapLoaded]);
+  }, [stations, roads, incidents, mapLoaded, styleRevision]);
 
   // Initialize Map
   useEffect(() => {
@@ -461,6 +512,7 @@ export const MapView: React.FC<MapViewProps> = ({
     map.on('load', () => {
       mapRef.current = map;
       addDigitalTwinLayers(map);
+      appliedStyleRef.current = mapStyle;
       setMapLoaded(true);
 
       // Fit entire NCT of Delhi on initial load
@@ -474,6 +526,7 @@ export const MapView: React.FC<MapViewProps> = ({
       map.remove();
       mapRef.current = null;
       setMapLoaded(false);
+      interactionsInitializedRef.current = false;
     };
   }, []);
 
@@ -482,11 +535,18 @@ export const MapView: React.FC<MapViewProps> = ({
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
 
-    map.setStyle(getStyleUrl(mapStyle));
+    if (appliedStyleRef.current === mapStyle) return;
 
+    // Register before setStyle so even fast/local styles cannot race the
+    // restoration callback.
     map.once('style.load', () => {
       addDigitalTwinLayers(map);
+      appliedStyleRef.current = mapStyle;
+      setStyleRevision((revision) => revision + 1);
     });
+    // A full style swap clears runtime-added sources and layers. The style
+    // load callback above then recreates our GeoJSON overlays from live refs.
+    map.setStyle(getStyleUrl(mapStyle), { diff: false });
   }, [mapStyle, addDigitalTwinLayers]);
 
   // Handle Layer Visibility Toggles
@@ -496,6 +556,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
     // Traffic layers
     const trafficVisibility = layers.traffic ? 'visible' : 'none';
+    if (map.getLayer('delhi-osm-roads-layer')) map.setLayoutProperty('delhi-osm-roads-layer', 'visibility', trafficVisibility);
     if (map.getLayer('delhi-roads-casing')) map.setLayoutProperty('delhi-roads-casing', 'visibility', trafficVisibility);
     if (map.getLayer('delhi-roads-line')) map.setLayoutProperty('delhi-roads-line', 'visibility', trafficVisibility);
     if (map.getLayer('delhi-roads-glow')) map.setLayoutProperty('delhi-roads-glow', 'visibility', trafficVisibility);
@@ -519,7 +580,7 @@ export const MapView: React.FC<MapViewProps> = ({
     const boundaryVisibility = layers.delhiBoundary ? 'visible' : 'none';
     if (map.getLayer('delhi-boundary-line')) map.setLayoutProperty('delhi-boundary-line', 'visibility', boundaryVisibility);
     if (map.getLayer('delhi-boundary-fill')) map.setLayoutProperty('delhi-boundary-fill', 'visibility', boundaryVisibility);
-  }, [layers, mapLoaded]);
+  }, [layers, mapLoaded, styleRevision]);
 
   // Handle Congestion Filter on Roads
   useEffect(() => {
@@ -536,7 +597,7 @@ export const MapView: React.FC<MapViewProps> = ({
         if (map.getLayer('delhi-roads-casing')) map.setFilter('delhi-roads-casing', filterExpr);
       }
     }
-  }, [selectedCongestionFilter, mapLoaded]);
+  }, [selectedCongestionFilter, mapLoaded, styleRevision]);
 
   // Handle AQI Category Filter on Stations
   useEffect(() => {
@@ -555,7 +616,7 @@ export const MapView: React.FC<MapViewProps> = ({
         if (map.getLayer('delhi-stations-label')) map.setFilter('delhi-stations-label', filterExpr);
       }
     }
-  }, [selectedAQIFilter, mapLoaded]);
+  }, [selectedAQIFilter, mapLoaded, styleRevision]);
 
   // Handle FlyTo Location when triggered from sidebar or hotspot
   useEffect(() => {

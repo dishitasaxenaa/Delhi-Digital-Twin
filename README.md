@@ -1,7 +1,7 @@
-# Delhi Digital Twin – Stage 2: Real-Time Data Integration
-### Urban Intelligence & Simulation Platform for NCT Delhi, India
+# Delhi Digital Twin – Stage 3: Traffic What-If Analysis
+### Urban Intelligence & Prediction-Based Planning for NCT Delhi, India
 
-An upgraded, production-ready Digital Twin of the National Capital Territory (NCT) of Delhi, integrating real-world air quality telemetry, arterial traffic flow models, and persistent historical storage via a Python FastAPI backend and interactive MapLibre GL frontend.
+An urban digital twin for the National Capital Territory (NCT) of Delhi, integrating air quality telemetry, arterial traffic data, transparent What-If estimates, and persistent history through a Python FastAPI backend and interactive MapLibre GL frontend.
 
 ---
 
@@ -19,7 +19,7 @@ Digital Twin/
 │   │   ├── core/
 │   │   │   ├── config.py           # Pydantic Settings (.env configuration & thresholds)
 │   │   │   ├── cpcb_calculator.py  # Official CPCB National Air Quality Index (NAQI) calculation
-│   │   │   └── database.py         # Persistent DB manager (SQLite & PostgreSQL / PostGIS)
+│   │   │   └── database.py         # PostgreSQL persistence (no extensions)
 │   │   ├── models/
 │   │   │   └── historical.py       # Telemetry schema definitions (AQI, Traffic, Incidents)
 │   │   ├── schemas/
@@ -82,7 +82,7 @@ Digital Twin/
 
 ## 💾 Persistent Database & Historical Telemetry Storage
 
-- **Database Engine**: Persistent storage via SQLite (`delhi_digital_twin.db`) out-of-the-box, with built-in connection support for **PostgreSQL + PostGIS** (`DATABASE_URL=postgresql://user:password@localhost:5432/delhi_digital_twin`).
+- **Database Engine**: PostgreSQL only, without PostGIS. (`DATABASE_URL=postgresql://user:password@localhost:5432/delhi_digital_twin`).
 - **Deduplication**: Automatically suppresses duplicate records within telemetry refresh windows (15 min for AQI, 2 min for Traffic).
 - **Historical Analysis (Requirement 8)**:
   - Stored records are queried via `GET /api/history/aqi` and `GET /api/history/traffic`.
@@ -92,6 +92,16 @@ Digital Twin/
 ---
 
 ## ⚡ Quick Start Guide
+
+### Stage 3: Traffic What-If Analysis
+
+The What-If Lab supports traffic-demand increases/decreases and signal green-time increases/decreases through clickable action buttons. Users select a road and percentage change; current baseline observations are fetched from TomTom automatically. If live TomTom speeds are unavailable, What-If calculations are disabled rather than using static fallback values.
+
+`POST /api/simulations` uses the BPR travel-time relation `t = t_free-flow × (1 + 0.15 × (v/c)^4)`. The baseline dimensionless v/c ratio is inferred by inverting BPR against observed TomTom speed. Traffic demand changes scale that ratio. Signal green-time changes scale a normalized capacity index proportionally, assuming unchanged cycle length and saturation flow. The UI compares current conditions to the estimate and shows speed, congestion, travel time, relative capacity index, percentage changes, and assumptions. These relative indices are not vehicle counts or measured road capacity; the TomTom speed-derived flow proxy is not treated as an observed count. PostgreSQL continues to store What-If analysis history. No machine-learning packages or PostGIS extension are required.
+
+### PostgreSQL and legacy data migration
+
+The application requires PostgreSQL and never falls back to another database. Configure `DATABASE_URL`, install backend requirements, and start the backend to create/update tables. Existing SQLite Stage 1/2 telemetry can be copied with `python backend/migrate_sqlite_to_postgres.py --source delhi_digital_twin.db`. The migration opens the source read-only, imports rows in one transaction, tracks a source fingerprint and ID mapping so reruns do not duplicate rows, and leaves the source untouched. Back up PostgreSQL before running it. Legacy simulation records are intentionally not imported as What-If estimates.
 
 ### 1. Start the FastAPI Backend
 
@@ -123,8 +133,8 @@ Open **[http://localhost:5173](http://localhost:5173)** in your browser.
 Edit `.env` to configure external provider keys:
 
 ```ini
-# Database: SQLite (default) or PostgreSQL with PostGIS
-DATABASE_URL=sqlite:///./delhi_digital_twin.db
+# PostgreSQL database (pgAdmin 4 can be used to manage it)
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/delhi_digital_twin
 
 # TomTom Traffic API (https://developer.tomtom.com/)
 TOMTOM_API_KEY=

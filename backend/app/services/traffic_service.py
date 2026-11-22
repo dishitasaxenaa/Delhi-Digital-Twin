@@ -1,5 +1,6 @@
 import logging
 import httpx
+import math
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
@@ -330,12 +331,17 @@ class TrafficService:
         if not force_refresh:
             cached = cache.get(cache_key)
             if cached:
-                return cached
+                cached_at = cache.get_cached_time(cache_key)
+                cache_age = max(0, int(datetime.now(timezone.utc).timestamp() - cached_at)) if cached_at else None
+                return cached.model_copy(update={"status": "CACHED", "cacheAgeSeconds": cache_age})
 
         roads: List[RoadSegmentSchema] = []
         incidents: List[TrafficIncidentSchema] = []
         api_status = "LIVE"
+        request_errors: List[str] = []
         error_msg = None
+        fetched_at = datetime.now(timezone.utc)
+        source_timestamp = None
         source_name = "TomTom Traffic Flow API"
         has_tomtom_key = bool(settings.TOMTOM_API_KEY and settings.TOMTOM_API_KEY.strip())
 
@@ -352,13 +358,37 @@ class TrafficService:
                         resp = await client.get(url)
                         if resp.status_code == 200:
                             data = resp.json().get("flowSegmentData", {})
-                            curr_speed = float(data.get("currentSpeed", meta["baselineSpeed"]))
-                            ff_speed = float(data.get("freeFlowSpeed", meta["freeFlowSpeed"]))
-                            ratio = round(curr_speed / max(ff_speed, 1.0), 2)
+                            raw_current_speed = data.get("currentSpeed")
+                            raw_free_flow_speed = data.get("freeFlowSpeed")
+                            if raw_current_speed is None or raw_free_flow_speed is None:
+                                request_errors.append(
+                                    f"{meta['name']}: TomTom response omitted currentSpeed or freeFlowSpeed."
+                                )
+                                continue
+                            try:
+                                curr_speed = float(raw_current_speed)
+                                ff_speed = float(raw_free_flow_speed)
+                            except (TypeError, ValueError):
+                                request_errors.append(f"{meta['name']}: TomTom returned non-numeric speed fields.")
+                                continue
+                            if not math.isfinite(curr_speed) or not math.isfinite(ff_speed) or curr_speed < 0 or ff_speed <= 0:
+                                request_errors.append(f"{meta['name']}: TomTom returned invalid speed fields.")
+                                continue
+                            flow_geometry = []
+                            coordinates = (data.get("coordinates") or {}).get("coordinate", [])
+                            for point in coordinates:
+                                try:
+                                    lon, lat = float(point["longitude"]), float(point["latitude"])
+                                except (KeyError, TypeError, ValueError):
+                                    continue
+                                if math.isfinite(lon) and math.isfinite(lat):
+                                    flow_geometry.append([lon, lat])
+                            ratio = curr_speed / ff_speed
                             cat = classify_congestion(ratio)
+                            source_timestamp = resp.headers.get("Date") or source_timestamp
 
                             # Estimate travel time: length / (speed / 60)
-                            travel_time = round((meta["lengthKm"] / max(curr_speed, 5.0)) * 60, 1)
+                            travel_time = round((meta["lengthKm"] / curr_speed) * 60, 1) if curr_speed > 0 else None
                             normal_time = round((meta["lengthKm"] / max(ff_speed, 20.0)) * 60, 1)
 
                             roads.append(RoadSegmentSchema(
@@ -379,19 +409,22 @@ class TrafficService:
                                 congestionRatio=ratio,
                                 source="TomTom Traffic Flow API",
                                 isLive=True,
+                                sourceTimestamp=resp.headers.get("Date") or fetched_at.isoformat(),
+                                trafficGeometry=flow_geometry if len(flow_geometry) >= 2 else None,
                             ))
                         else:
                             # HTTP error from TomTom (e.g. 403 Invalid Key or 429 Rate Limit)
-                            api_status = "API_ERROR"
-                            error_msg = f"TomTom API returned HTTP {resp.status_code}: {resp.text[:100]}"
-                            break
+                            request_errors.append(f"{meta['name']}: TomTom API returned HTTP {resp.status_code}.")
                     except Exception as e:
-                        api_status = "API_ERROR"
-                        error_msg = f"Error calling TomTom Traffic Flow API: {str(e)}"
-                        break
+                        # Never include the request URL in an error; the URL
+                        # contains the TomTom API key as a query parameter.
+                        request_errors.append(f"{meta['name']}: TomTom request failed ({type(e).__name__}).")
+
+            if request_errors:
+                api_status = "PARTIAL" if roads else "API_ERROR"
 
             # Also query TomTom Incident Details within Delhi BBox
-            if has_tomtom_key and api_status != "API_ERROR":
+            if has_tomtom_key and roads:
                 try:
                     inc_url = (
                         f"https://api.tomtom.com/traffic/services/5/incidentDetails?"
@@ -426,13 +459,17 @@ class TrafficService:
                 except Exception as e:
                     logger.warning(f"TomTom Incident API fetch failed: {e}")
 
-        # If TomTom key is not configured OR TomTom API failed:
+        # Preserve the dashboard's labelled offline reference corridors when
+        # live data is unavailable. They remain isLive=False and are excluded
+        # from What-If baseline selection.
         if not roads:
             if not has_tomtom_key:
                 api_status = "API_KEY_REQUIRED"
-                error_msg = "TOMTOM_API_KEY is not configured in .env. Serving Delhi road network with baseline speed calculations."
+                error_msg = "TOMTOM_API_KEY is not configured in .env. Live traffic observations are unavailable."
                 source_name = "Delhi Arterial Network (Key Required for Live Sensors)"
             else:
+                api_status = "API_ERROR"
+                error_msg = "; ".join(request_errors) or "TomTom returned no usable live traffic observations."
                 source_name = "Delhi Arterial Network (Fallback)"
 
             for meta in DELHI_ROADS_METADATA:
@@ -483,10 +520,10 @@ class TrafficService:
             averageSpeedKmH=avg_speed,
             averageCongestionPercent=max(0.0, avg_cong_pct),
             highCongestionRoadsCount=high_cong_count,
-            lastUpdated=datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M:%S UTC"),
+            lastUpdated=(source_timestamp or fetched_at.strftime("%a, %d %b %Y %H:%M:%S GMT")),
             source=source_name,
             status=api_status,
-            errorMessage=error_msg,
+            errorMessage="; ".join(request_errors) if roads and request_errors else error_msg,
         )
 
         cache.set(cache_key, response, settings.TRAFFIC_CACHE_TTL)

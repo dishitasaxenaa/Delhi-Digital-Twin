@@ -25,7 +25,7 @@ class RoadSegmentSchema(BaseModel):
     avgSpeedKmH: float
     freeFlowSpeedKmH: float
     speedLimitKmH: float
-    travelTimeMin: float
+    travelTimeMin: Optional[float]
     normalTimeMin: float
     lengthKm: float
     activeIncidentsCount: int
@@ -33,6 +33,8 @@ class RoadSegmentSchema(BaseModel):
     congestionRatio: float
     source: str
     isLive: bool = True
+    sourceTimestamp: Optional[str] = None  # TomTom HTTP Date response timestamp; flow payload has no measurement timestamp.
+    trafficGeometry: Optional[List[List[float]]] = None  # TomTom's matched flow segment, [longitude, latitude].
 
 class TrafficResponseSchema(BaseModel):
     roads: List[RoadSegmentSchema]
@@ -43,5 +45,6 @@ class TrafficResponseSchema(BaseModel):
     highCongestionRoadsCount: int
     lastUpdated: str
     source: str
-    status: str # "LIVE", "CACHED", "API_KEY_REQUIRED", "API_ERROR"
+    status: str # "LIVE", "PARTIAL", "CACHED", "API_KEY_REQUIRED", "API_ERROR"
     errorMessage: Optional[str] = None
+    cacheAgeSeconds: Optional[int] = None

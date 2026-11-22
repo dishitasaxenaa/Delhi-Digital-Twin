@@ -292,7 +292,7 @@ export const MapPopup: React.FC<MapPopupProps> = ({
                 className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md shadow-cyan-600/20"
               >
                 <Compass size={14} />
-                <span>Model In Simulation Lab</span>
+                <span>Ask What-If Analysis</span>
                 <ArrowRight size={13} />
               </button>
             )}

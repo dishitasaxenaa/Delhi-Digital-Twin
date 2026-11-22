@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # Database
-    DATABASE_URL: str = "sqlite:///./delhi_digital_twin.db"
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/delhi_digital_twin"
 
     # Traffic API (TomTom)
     TOMTOM_API_KEY: Optional[str] = None

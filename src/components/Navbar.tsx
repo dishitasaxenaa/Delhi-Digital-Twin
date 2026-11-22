@@ -106,7 +106,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-slate-400 tracking-wide flex items-center gap-1.5">
-              <span>Urban Intelligence & Simulation Platform</span>
+              <span>Urban Intelligence & What-If Analysis</span>
               <span className="inline-block w-1 h-1 rounded-full bg-slate-600"></span>
               <span className="text-slate-500 font-mono">NCT Delhi</span>
             </p>
@@ -139,7 +139,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <Compass size={14} className={currentTab === 'simulation' ? 'text-purple-400' : ''} />
-            <span>Simulation Lab</span>
+            <span>What-If Lab</span>
             <span className="text-[9px] px-1 py-0.2 bg-purple-900/60 text-purple-300 rounded border border-purple-700/40">
               PREVIEW
             </span>

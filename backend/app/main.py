@@ -10,6 +10,7 @@ from backend.app.api.aqi import router as aqi_router
 from backend.app.api.traffic import router as traffic_router
 from backend.app.api.city import router as city_router
 from backend.app.api.history import router as history_router
+from backend.app.api.simulations import router as simulations_router
 from backend.app.services.aqi_service import AQIService
 from backend.app.services.traffic_service import TrafficService
 
@@ -68,6 +69,7 @@ app.include_router(aqi_router)
 app.include_router(traffic_router)
 app.include_router(city_router)
 app.include_router(history_router)
+app.include_router(simulations_router)
 
 @app.get("/")
 def get_root():

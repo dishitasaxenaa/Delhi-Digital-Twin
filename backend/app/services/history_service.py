@@ -48,8 +48,8 @@ class HistoryService:
                             st.get("so2"),
                             st.get("dominantPollutant", "PM2.5"),
                             st.get("source", "Real API"),
-                            1 if st.get("isLive", True) else 0,
-                            1 if st.get("isCalculated", False) else 0,
+                            bool(st.get("isLive", True)),
+                            bool(st.get("isCalculated", False)),
                         ))
                         saved_count += 1
             if saved_count > 0:
@@ -77,10 +77,10 @@ class HistoryService:
                         cur.execute("""
                         INSERT INTO traffic_readings (
                             road_id, road_name, corridor, timestamp, current_speed,
-                            free_flow_speed, congestion_ratio, congestion_level,
+                            free_flow_speed, congestion_ratio, congestion_level, flow_vehicles_per_hour,
                             travel_time_min, normal_time_min, active_incidents_count,
                             source, is_live
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
                             road_id,
                             rd.get("name", "Unknown Road"),
@@ -90,11 +90,12 @@ class HistoryService:
                             rd.get("freeFlowSpeedKmH", 60.0),
                             rd.get("congestionRatio", 1.0),
                             rd.get("congestionLevel", "Moderate"),
+                            rd.get("flowVehiclesPerHour"),
                             rd.get("travelTimeMin", 0.0),
                             rd.get("normalTimeMin", 0.0),
                             rd.get("activeIncidentsCount", 0),
                             rd.get("source", "Traffic API"),
-                            1 if rd.get("isLive", True) else 0,
+                            bool(rd.get("isLive", True)),
                         ))
                         saved_count += 1
             if saved_count > 0:
@@ -116,36 +117,36 @@ class HistoryService:
                 # Group AQI by hour
                 cur.execute("""
                 SELECT 
-                    strftime('%H:00', timestamp) as hr,
+                    to_char(date_trunc('hour', timestamp), 'HH24:00') as hr,
                     AVG(aqi) as avg_aqi,
                     AVG(pm25) as avg_pm25
                 FROM aqi_readings
                 WHERE timestamp >= ?
-                GROUP BY hr
-                ORDER BY timestamp ASC
+                GROUP BY date_trunc('hour', timestamp)
+                ORDER BY date_trunc('hour', timestamp) ASC
                 """, (since_iso,))
                 aqi_rows = cur.fetchall()
 
                 # Group Traffic by hour
                 cur.execute("""
                 SELECT 
-                    strftime('%H:00', timestamp) as hr,
+                    to_char(date_trunc('hour', timestamp), 'HH24:00') as hr,
                     AVG(current_speed) as avg_speed,
                     AVG(congestion_ratio) as avg_ratio
                 FROM traffic_readings
                 WHERE timestamp >= ?
-                GROUP BY hr
-                ORDER BY timestamp ASC
+                GROUP BY date_trunc('hour', timestamp)
+                ORDER BY date_trunc('hour', timestamp) ASC
                 """, (since_iso,))
                 traffic_rows = cur.fetchall()
 
                 # If insufficient data (< 2 distinct hours), return empty
-                distinct_hours = set([r[0] for r in aqi_rows] + [r[0] for r in traffic_rows])
+                distinct_hours = set([r['hr'] for r in aqi_rows] + [r['hr'] for r in traffic_rows])
                 if len(distinct_hours) < 2:
                     return []
 
-                aqi_by_hr = {r[0]: (round(r[1]), round(r[2] or 0.0, 1)) for r in aqi_rows}
-                traffic_by_hr = {r[0]: (round(r[1], 1), r[2]) for r in traffic_rows}
+                aqi_by_hr = {r['hr']: (round(r['avg_aqi']), round(r['avg_pm25'] or 0.0, 1)) for r in aqi_rows}
+                traffic_by_hr = {r['hr']: (round(r['avg_speed'], 1), r['avg_ratio']) for r in traffic_rows}
 
                 for hr in sorted(distinct_hours):
                     aqi_val, pm25_val = aqi_by_hr.get(hr, (0, 0.0))

@@ -46,7 +46,9 @@ export function getAllIncidents(): TrafficIncident[] {
 }
 
 export function getRoadsGeoJSON(customRoads?: RoadSegment[]) {
-  const roads = customRoads && customRoads.length > 0 ? customRoads : delhiRoads;
+  const roads = (customRoads ?? delhiRoads).filter((road) =>
+    road.isLive === true && road.trafficGeometry && road.trafficGeometry.length >= 2
+  );
   return {
     type: 'FeatureCollection' as const,
     features: roads.map((road) => ({
@@ -72,7 +74,7 @@ export function getRoadsGeoJSON(customRoads?: RoadSegment[]) {
       },
       geometry: {
         type: 'LineString' as const,
-        coordinates: road.coordinates,
+        coordinates: road.trafficGeometry!,
       },
     })),
   };

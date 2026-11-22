@@ -61,7 +61,7 @@ export function getStationById(id: string, customList?: AQIStation[]): AQIStatio
 
 // Convert stations to GeoJSON Point FeatureCollection for MapLibre
 export function getStationsGeoJSON(customStations?: AQIStation[]) {
-  const stations = customStations && customStations.length > 0 ? customStations : delhiStations;
+  const stations = (customStations ?? delhiStations).filter(isUsableObservation);
   return {
     type: 'FeatureCollection' as const,
     features: stations.map((station) => ({
@@ -85,7 +85,6 @@ export function getStationsGeoJSON(customStations?: AQIStation[]) {
         source: station.source,
         isLive: station.isLive,
         isCalculated: station.isCalculated,
-        weight: Math.min(Math.max((station.aqi - 50) / 450, 0.1), 1.0),
       },
       geometry: {
         type: 'Point' as const,
@@ -97,12 +96,13 @@ export function getStationsGeoJSON(customStations?: AQIStation[]) {
 
 // Generate interpolated AQI grid points across NCT Delhi for smooth heatmap rendering
 export function getAQIHeatmapGeoJSON(customStations?: AQIStation[]) {
-  const stations = customStations && customStations.length > 0 ? customStations : delhiStations;
-  const points: {
+  const stations = (customStations ?? []).filter(isUsableObservation);
+  const points: Array<{
     type: 'Feature';
-    properties: { aqi: number; weight: number };
+    properties: { aqi: number; category: AQICategory; weight: number };
     geometry: { type: 'Point'; coordinates: [number, number] };
-  }[] = [];
+  }> = [];
+  if (!stations.length) return { type: 'FeatureCollection' as const, features: points };
 
   // Delhi bounding box steps
   const minLng = 76.88;
@@ -110,8 +110,8 @@ export function getAQIHeatmapGeoJSON(customStations?: AQIStation[]) {
   const minLat = 28.43;
   const maxLat = 28.86;
 
-  const latSteps = 16;
-  const lngSteps = 18;
+  const latSteps = 60;
+  const lngSteps = 60;
 
   const latDelta = (maxLat - minLat) / latSteps;
   const lngDelta = (maxLng - minLng) / lngSteps;
@@ -124,28 +124,31 @@ export function getAQIHeatmapGeoJSON(customStations?: AQIStation[]) {
       // Inverse Distance Weighting (IDW) from all reporting stations
       let weightedAqiSum = 0;
       let totalWeight = 0;
+      let exactAqi: number | undefined;
 
       for (const station of stations) {
-        if (station.aqi <= 0) continue;
-        const dLng = lng - station.coordinates[0];
-        const dLat = lat - station.coordinates[1];
-        const distSq = dLng * dLng + dLat * dLat;
-        const dist = Math.sqrt(distSq);
-
-        // Power parameter p=2.2
-        const w = 1 / Math.pow(Math.max(dist, 0.015), 2.2);
+        const dLatKm = (lat - station.coordinates[1]) * 111.32;
+        const dLngKm = (lng - station.coordinates[0]) * 111.32 * Math.cos((lat * Math.PI) / 180);
+        const distanceKm = Math.hypot(dLngKm, dLatKm);
+        if (distanceKm < 0.01) {
+          exactAqi = station.aqi;
+          break;
+        }
+        // Inverse-distance weighting of CPCB AQI readings, not pollutant concentrations.
+        const w = 1 / Math.pow(Math.max(distanceKm, 0.1), 2.2);
         weightedAqiSum += station.aqi * w;
         totalWeight += w;
       }
 
-      const interpolatedAqi = totalWeight > 0 ? Math.round(weightedAqiSum / totalWeight) : 200;
-      const normalizedWeight = Math.min(Math.max((interpolatedAqi - 40) / 460, 0.05), 1.0);
+      if (exactAqi === undefined && totalWeight === 0) continue;
+      const interpolatedAqi = exactAqi ?? Math.round(weightedAqiSum / totalWeight);
 
       points.push({
         type: 'Feature',
         properties: {
           aqi: interpolatedAqi,
-          weight: normalizedWeight,
+          category: getAQICategory(interpolatedAqi),
+          weight: Math.min(Math.max(interpolatedAqi / 500, 0), 1),
         },
         geometry: {
           type: 'Point',
@@ -155,14 +158,15 @@ export function getAQIHeatmapGeoJSON(customStations?: AQIStation[]) {
     }
   }
 
-  // Also include the actual station points with high weight
+  // Include exact station observations so station values remain represented
+  // even when they fall between generated grid cells.
   for (const st of stations) {
-    if (st.aqi <= 0) continue;
     points.push({
       type: 'Feature',
       properties: {
         aqi: st.aqi,
-        weight: Math.min(Math.max((st.aqi - 40) / 460, 0.1), 1.0),
+        category: getAQICategory(st.aqi),
+        weight: Math.min(Math.max(st.aqi / 500, 0), 1),
       },
       geometry: {
         type: 'Point',
@@ -175,4 +179,10 @@ export function getAQIHeatmapGeoJSON(customStations?: AQIStation[]) {
     type: 'FeatureCollection' as const,
     features: points,
   };
+}
+
+function isUsableObservation(station: AQIStation): boolean {
+  return station.isLive === true && station.aqi > 0 &&
+    Number.isFinite(station.aqi) && station.coordinates?.length === 2 &&
+    station.coordinates.every(Number.isFinite);
 }
